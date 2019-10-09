@@ -1,0 +1,95 @@
+---
+title: "Read"
+author: "Brendan Knapp"
+date: "10/8/2019"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+
+```{r}
+dl_path <- "datasets/yellow_tripdata_2010-01.csv"
+
+if (!file.exists(dl_path)) {
+  download.file(
+    "https://s3.amazonaws.com/nyc-tlc/trip+data/yellow_tripdata_2010-01.csv",
+    destfile = dl_path
+  )
+}
+```
+
+```{r}
+library(data.table)
+library(arrow)
+library(scales)
+library(microbenchmark)
+library(ggplot2)
+```
+
+
+```{r}
+col_names <- c("vendor_id", "pickup_datetime", "dropoff_datetime", 
+               "passenger_count", "trip_distance", "pickup_longitude", 
+               "pickup_latitude", "rate_code", "store_and_fwd_flag", 
+               "dropoff_longitude", "dropoff_latitude", "payment_type", 
+               "fare_amount", "surcharge", "mta_tax", "tip_amount", 
+               "tolls_amount", "total_amount")
+
+init <- fread(dl_path)
+colnames(init) <- col_names
+
+big_df <- rbindlist(
+  replicate(n = 5, init, simplify = FALSE)
+)
+
+setNames(comma(dim(big_df)), c("# rows", "# cols"))
+```
+
+```{r}
+csv_path <- "datasets/csvy-file.csv"
+csvy_path <- "datasets/csvy-file.csvy"
+parquet_path <- "datasets/parquet-file.parquet"
+
+
+fwrite(big_df, file = csv_path)
+fwrite(big_df, file = csvy_path)
+write_parquet(big_df, sink = parquet_path)
+
+number_bytes(
+  file.size(c(csv_path, csvy_path, parquet_path))
+)
+```
+
+```{r}
+res <- microbenchmark::microbenchmark(
+  DT_csv = fread(csv_path, showProgress = FALSE),
+
+  DT_csvy = fread(csvy_path, showProgress = FALSE),
+  
+  arrow_parquet = read_parquet(parquet_path),
+  
+
+  times = 5
+)
+```
+
+
+```{r}
+res
+
+ggplot2::autoplot(res)
+```
+
+
+```{r}
+data.table::getDTthreads()
+sessionInfo()
+```
+
+
